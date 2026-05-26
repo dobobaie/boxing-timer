@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Boxing Timer",
+    "slug": "boxing-timer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d0d0d"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dobobaie.boxingtimer"
+    },
+    "android": {
+      "package": "com.dobobaie.boxingtimer",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0d0d0d"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-av"]
+  }
+}

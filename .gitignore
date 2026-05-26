@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+*.log
+.DS_Store
+.env
+.env.local
+yarn-error.log
+npm-debug.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+expo-env.d.ts
