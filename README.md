@@ -18,13 +18,12 @@ React Native (Expo SDK 54) boxing round / interval timer.
 
 ## Rules
 
-Each rule has three parts:
+Each rule has two parts:
 
 | Part | Meaning |
 |---|---|
 | **When** | A condition on either the current `round` (1-based) or `totalTimeSec` (seconds elapsed in the session). |
 | **Apply** | An arithmetic operation (`+`, `-`, `*`, `/`) and a value, applied to either the timer's **base** duration or to the duration this timer used in its **previous** round. |
-| **Clamp** | Optional `min` / `max` bounds on the resulting duration. |
 
 Rules are evaluated in array order; later matches overwrite earlier ones. `appliesTo: previous` is a no-op on the very first round for that timer (there is no "previous" yet).
 
@@ -32,10 +31,10 @@ Rules are evaluated in array order; later matches overwrite earlier ones. `appli
 
 The shipping **Pyramid** profile uses two rules on the **Fight** timer (base 10s):
 
-1. `when round <= 4 -> previous * 2 (max 60)` — doubles each round, capped at 60s.
-2. `when round >= 5 -> previous / 2 (min 5)` — halves each round, never below 5s.
+1. `when round <= 4 -> previous * 2` — doubles the previous round's fight.
+2. `when round >= 5 -> previous / 2` — halves the previous round's fight.
 
-Result over 8 rounds: **10 → 20 → 40 → 60 → 30 → 15 → 8 → 5** seconds.
+Result over 8 rounds: **10 → 20 → 40 → 80 → 40 → 20 → 10 → 5** seconds.
 
 The math lives in [`src/engine/rules.ts`](src/engine/rules.ts) (pure function, easy to unit-test) and the full per-round schedule is pre-computed by [`src/engine/plan.ts`](src/engine/plan.ts) so the UI can show an accurate total session time even when rules are active.
 

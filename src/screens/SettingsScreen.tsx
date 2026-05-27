@@ -98,7 +98,7 @@ export function SettingsScreen(props: Props) {
         <View style={styles.profilePill}>
           <Text style={styles.profilePillLabel}>Profile</Text>
           <Text style={styles.profilePillName}>{profile.name}</Text>
-          <Text style={styles.profilePillTotal}>Total ≈ {formatHMS(total)}</Text>
+          <Text style={styles.profilePillTotal}>Total {formatHMS(total)}</Text>
         </View>
 
         <Text style={styles.section}>Rounds</Text>

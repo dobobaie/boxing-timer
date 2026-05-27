@@ -89,7 +89,7 @@ export function TimerEditor({ timer, onChange, onClose }: Props) {
 
         <Text style={styles.disclaimer}>
           Rules apply in order. "Previous" means the duration this timer used in its prior round
-          (falls back to base for round 1). Use min/max to clamp.
+          (falls back to base for round 1); "Base" always starts from the duration above.
         </Text>
       </ScrollView>
     </View>

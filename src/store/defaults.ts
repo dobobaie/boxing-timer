@@ -26,21 +26,19 @@ export function pyramidProfile(): Profile {
         name: 'Fight',
         durationSec: 10,
         rules: [
-          // Ramp up: double each round while we're still <= round 4. Caps at 60s.
+          // Ramp up: double the previous round's fight for the first 4 rounds.
           {
             id: uid('r_'),
             when: { metric: 'round', op: '<=', value: 4 },
             apply: { op: '*', value: 2 },
             appliesTo: 'previous',
-            max: 60,
           },
-          // Ramp down: halve from round 5 onward.
+          // Ramp down: halve the previous round's fight from round 5 onward.
           {
             id: uid('r_'),
             when: { metric: 'round', op: '>=', value: 5 },
             apply: { op: '/', value: 2 },
             appliesTo: 'previous',
-            min: 5,
           },
         ],
       },

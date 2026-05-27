@@ -19,8 +19,6 @@ export type Rule = {
   when: RuleCondition;
   apply: RuleAction;
   appliesTo: AppliesTo;
-  min?: number;
-  max?: number;
 };
 
 export type Timer = {

@@ -28,13 +28,6 @@ function apply(value: number, op: ArithOp, operand: number): number {
   }
 }
 
-function clamp(value: number, min?: number, max?: number): number {
-  let v = value;
-  if (typeof min === 'number') v = Math.max(min, v);
-  if (typeof max === 'number') v = Math.min(max, v);
-  return v;
-}
-
 export type ResolveContext = {
   /** 1-based round index. */
   round: number;
@@ -62,8 +55,7 @@ export function resolveTimerDuration(timer: Timer, ctx: ResolveContext): number 
     }
     const source =
       rule.appliesTo === 'previous' ? (ctx.previousDurationSec as number) : base;
-    const next = apply(source, rule.apply.op, rule.apply.value);
-    running = clamp(next, rule.min, rule.max);
+    running = apply(source, rule.apply.op, rule.apply.value);
   }
   return Math.max(1, Math.round(running));
 }
@@ -72,9 +64,5 @@ export function describeRule(rule: Rule): string {
   const when = `when ${rule.when.metric === 'round' ? 'round' : 'total time'} ${rule.when.op} ${rule.when.value}${rule.when.metric === 'totalTimeSec' ? 's' : ''}`;
   const base = rule.appliesTo === 'previous' ? 'previous' : 'base';
   const action = `${base} ${rule.apply.op} ${rule.apply.value}`;
-  const clampParts: string[] = [];
-  if (typeof rule.min === 'number') clampParts.push(`min ${rule.min}`);
-  if (typeof rule.max === 'number') clampParts.push(`max ${rule.max}`);
-  const clampStr = clampParts.length ? ` (${clampParts.join(', ')})` : '';
-  return `${when} -> ${action}${clampStr}`;
+  return `${when} -> ${action}`;
 }

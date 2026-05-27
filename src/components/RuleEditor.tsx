@@ -68,36 +68,6 @@ export function RuleEditor({ rule, onChange, onDelete }: Props) {
           step={rule.apply.op === '*' || rule.apply.op === '/' ? 0.5 : 1}
         />
       </View>
-
-      <Text style={styles.label}>Clamp (optional)</Text>
-      <View style={styles.row}>
-        <Text style={styles.inline}>min</Text>
-        <NumberStepper
-          value={rule.min ?? 0}
-          onChange={(v) => patch({ min: v })}
-          min={0}
-          step={1}
-          width={100}
-        />
-        {typeof rule.min === 'number' ? (
-          <Pressable onPress={() => patch({ min: undefined })}>
-            <Text style={styles.clear}>×</Text>
-          </Pressable>
-        ) : null}
-        <Text style={styles.inline}>max</Text>
-        <NumberStepper
-          value={rule.max ?? 60}
-          onChange={(v) => patch({ max: v })}
-          min={0}
-          step={1}
-          width={100}
-        />
-        {typeof rule.max === 'number' ? (
-          <Pressable onPress={() => patch({ max: undefined })}>
-            <Text style={styles.clear}>×</Text>
-          </Pressable>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -143,8 +113,6 @@ const styles = StyleSheet.create({
   delete: { color: colors.accent },
   label: { color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.xs, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
-  inline: { color: colors.textMuted },
-  clear: { color: colors.accent, paddingHorizontal: spacing.sm, fontSize: 16 },
   seg: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radii.sm, padding: 2 },
   segItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radii.sm },
   segItemActive: { backgroundColor: colors.accent },
