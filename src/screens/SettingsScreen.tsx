@@ -8,6 +8,7 @@ import { formatHMS } from '../utils/format';
 import { NumberStepper } from '../components/NumberStepper';
 import { TimerEditor } from '../components/TimerEditor';
 import { ProfileManager } from '../components/ProfileManager';
+import { SchedulePreview } from '../components/SchedulePreview';
 import { colors, radii, spacing } from '../theme';
 
 type Props = {
@@ -156,8 +157,11 @@ export function SettingsScreen(props: Props) {
 
         <Text style={styles.disclaimer}>
           Tap a timer name to edit its duration and rules. Add rules to grow/shrink durations
-          based on round number or total elapsed time.
+          based on the round number, the timer's own length, or total elapsed time.
         </Text>
+
+        <Text style={styles.section}>Schedule</Text>
+        <SchedulePreview profile={profile} />
       </ScrollView>
 
       <Modal visible={editingTimer !== null} animationType="slide" onRequestClose={() => setEditingTimerId(null)}>

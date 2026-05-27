@@ -44,9 +44,19 @@ export type ResolveContext = {
  */
 export function resolveTimerDuration(timer: Timer, ctx: ResolveContext): number {
   const base = timer.durationSec;
+  // The timer's length coming into this round: previous round's value, or base
+  // on round 1. Used by the 'duration' metric so rules can react to the timer's
+  // own size (e.g. double until it hits 60s, then halve — an oscillation that
+  // 'totalTimeSec' can't express because session time only ever increases).
+  const incoming = ctx.previousDurationSec ?? base;
   let running = base;
   for (const rule of timer.rules) {
-    const lhs = rule.when.metric === 'round' ? ctx.round : ctx.totalTimeSec;
+    const lhs =
+      rule.when.metric === 'round'
+        ? ctx.round
+        : rule.when.metric === 'duration'
+          ? incoming
+          : ctx.totalTimeSec;
     if (!compare(lhs, rule.when.op, rule.when.value)) continue;
 
     if (rule.appliesTo === 'previous' && ctx.previousDurationSec === undefined) {
@@ -61,7 +71,14 @@ export function resolveTimerDuration(timer: Timer, ctx: ResolveContext): number 
 }
 
 export function describeRule(rule: Rule): string {
-  const when = `when ${rule.when.metric === 'round' ? 'round' : 'total time'} ${rule.when.op} ${rule.when.value}${rule.when.metric === 'totalTimeSec' ? 's' : ''}`;
+  const metricLabel =
+    rule.when.metric === 'round'
+      ? 'round'
+      : rule.when.metric === 'duration'
+        ? 'this timer'
+        : 'elapsed';
+  const unit = rule.when.metric === 'round' ? '' : 's';
+  const when = `when ${metricLabel} ${rule.when.op} ${rule.when.value}${unit}`;
   const base = rule.appliesTo === 'previous' ? 'previous' : 'base';
   const action = `${base} ${rule.apply.op} ${rule.apply.value}`;
   return `${when} -> ${action}`;

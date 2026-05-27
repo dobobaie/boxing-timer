@@ -4,10 +4,25 @@ import { Rule, ComparisonOp, ArithOp, Metric, AppliesTo } from '../types';
 import { NumberStepper } from './NumberStepper';
 import { colors, radii, spacing } from '../theme';
 
-const METRICS: Metric[] = ['round', 'totalTimeSec'];
+const METRIC_OPTIONS: { value: Metric; label: string }[] = [
+  { value: 'round', label: 'round' },
+  { value: 'duration', label: 'this timer' },
+  { value: 'totalTimeSec', label: 'elapsed' },
+];
 const CMP_OPS: ComparisonOp[] = ['<', '<=', '==', '>=', '>'];
 const ARITH_OPS: ArithOp[] = ['+', '-', '*', '/'];
 const APPLIES: AppliesTo[] = ['base', 'previous'];
+
+function metricHint(metric: Metric): string {
+  switch (metric) {
+    case 'round':
+      return 'round = the current round number';
+    case 'duration':
+      return "this timer = this timer's length coming into the round (grows/shrinks as rules fire — use this to oscillate)";
+    case 'totalTimeSec':
+      return 'elapsed = total session seconds so far (only ever increases)';
+  }
+}
 
 type Props = {
   rule: Rule;
@@ -32,7 +47,7 @@ export function RuleEditor({ rule, onChange, onDelete }: Props) {
       <Text style={styles.label}>When</Text>
       <View style={styles.row}>
         <Segmented
-          options={METRICS.map((m) => ({ value: m, label: m === 'round' ? 'round' : 'total s' }))}
+          options={METRIC_OPTIONS}
           value={rule.when.metric}
           onChange={(v) => patchWhen({ metric: v as Metric })}
         />
@@ -48,6 +63,7 @@ export function RuleEditor({ rule, onChange, onDelete }: Props) {
           step={rule.when.metric === 'round' ? 1 : 10}
         />
       </View>
+      <Text style={styles.hint}>{metricHint(rule.when.metric)}</Text>
 
       <Text style={styles.label}>Apply</Text>
       <View style={styles.row}>
@@ -112,6 +128,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.textPrimary, fontWeight: '600' },
   delete: { color: colors.accent },
   label: { color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.xs, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  hint: { color: colors.textMuted, fontSize: 11, marginTop: spacing.xs, lineHeight: 15 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
   seg: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radii.sm, padding: 2 },
   segItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radii.sm },
