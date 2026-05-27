@@ -1,5 +1,5 @@
 import { Profile } from '../types';
-import { resolveTimerDuration } from './rules';
+import { resolveTimer } from './rules';
 
 export type PlanEntry = {
   round: number;
@@ -18,17 +18,20 @@ export type PlanEntry = {
  */
 export function buildPlan(profile: Profile): PlanEntry[] {
   const entries: PlanEntry[] = [];
-  // previousDuration is per-timer across rounds (so a rule with appliesTo:previous
-  // chains across the same timer's prior round, not across different timers).
+  // Per-timer carry-over across rounds: previous resolved duration (so an
+  // appliesTo:previous rule/trigger chains across the same timer's prior round)
+  // and the active trigger index (so the trigger state machine advances forward).
   const previousByTimerId = new Map<string, number>();
+  const activeTriggerByTimerId = new Map<string, number>();
   let cumulative = 0;
   for (let round = 1; round <= Math.max(1, profile.totalRounds); round++) {
     profile.timers.forEach((timer, idx) => {
       const previousDurationSec = previousByTimerId.get(timer.id);
-      const durationSec = resolveTimerDuration(timer, {
+      const { durationSec, activeTriggerIndex } = resolveTimer(timer, {
         round,
         totalTimeSec: cumulative,
         previousDurationSec,
+        activeTriggerIndex: activeTriggerByTimerId.get(timer.id) ?? -1,
       });
       entries.push({
         round,
@@ -40,6 +43,7 @@ export function buildPlan(profile: Profile): PlanEntry[] {
       });
       cumulative += durationSec;
       previousByTimerId.set(timer.id, durationSec);
+      activeTriggerByTimerId.set(timer.id, activeTriggerIndex);
     });
   }
   return entries;

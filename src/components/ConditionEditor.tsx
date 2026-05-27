@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Rule, ComparisonOp, ArithOp, Metric, AppliesTo } from '../types';
+import { ComparisonOp, ArithOp, Metric, AppliesTo, RuleCondition, RuleAction } from '../types';
 import { NumberStepper } from './NumberStepper';
 import { colors, radii, spacing } from '../theme';
 
@@ -18,70 +18,100 @@ function metricHint(metric: Metric): string {
     case 'round':
       return 'round = the current round number';
     case 'duration':
-      return "this timer = this timer's length coming into the round (grows/shrinks as rules fire — use this to oscillate)";
+      return "this timer = this timer's length coming into the round (grows/shrinks as it fires — use this to oscillate)";
     case 'totalTimeSec':
       return 'elapsed = total session seconds so far (only ever increases)';
   }
 }
 
-type Props = {
-  rule: Rule;
-  onChange: (r: Rule) => void;
-  onDelete: () => void;
+// Rule and Trigger are structurally identical; this editor drives both.
+export type RuleLike = {
+  id: string;
+  when: RuleCondition;
+  apply: RuleAction;
+  appliesTo: AppliesTo;
 };
 
-export function RuleEditor({ rule, onChange, onDelete }: Props) {
-  const patch = (p: Partial<Rule>) => onChange({ ...rule, ...p });
-  const patchWhen = (p: Partial<Rule['when']>) => onChange({ ...rule, when: { ...rule.when, ...p } });
-  const patchApply = (p: Partial<Rule['apply']>) => onChange({ ...rule, apply: { ...rule.apply, ...p } });
+type Props = {
+  value: RuleLike;
+  onChange: (next: RuleLike) => void;
+  onDelete: () => void;
+  title: string;
+  whenLabel: string;
+  applyLabel: string;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+};
+
+export function ConditionEditor({
+  value,
+  onChange,
+  onDelete,
+  title,
+  whenLabel,
+  applyLabel,
+  onMoveUp,
+  onMoveDown,
+}: Props) {
+  const patch = (p: Partial<RuleLike>) => onChange({ ...value, ...p });
+  const patchWhen = (p: Partial<RuleCondition>) => onChange({ ...value, when: { ...value.when, ...p } });
+  const patchApply = (p: Partial<RuleAction>) => onChange({ ...value, apply: { ...value.apply, ...p } });
 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.cardTitle}>Rule</Text>
-        <Pressable onPress={onDelete}>
-          <Text style={styles.delete}>delete</Text>
-        </Pressable>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <View style={styles.headerActions}>
+          {onMoveUp ? (
+            <Pressable onPress={onMoveUp}><Text style={styles.move}>↑</Text></Pressable>
+          ) : null}
+          {onMoveDown ? (
+            <Pressable onPress={onMoveDown}><Text style={styles.move}>↓</Text></Pressable>
+          ) : null}
+          <Pressable onPress={onDelete}>
+            <Text style={styles.delete}>delete</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <Text style={styles.label}>When</Text>
+      <Text style={styles.label}>{whenLabel}</Text>
       <View style={styles.row}>
         <Segmented
           options={METRIC_OPTIONS}
-          value={rule.when.metric}
+          value={value.when.metric}
           onChange={(v) => patchWhen({ metric: v as Metric })}
         />
         <Segmented
           options={CMP_OPS.map((o) => ({ value: o, label: o }))}
-          value={rule.when.op}
+          value={value.when.op}
           onChange={(v) => patchWhen({ op: v as ComparisonOp })}
         />
         <NumberStepper
-          value={rule.when.value}
+          value={value.when.value}
           onChange={(v) => patchWhen({ value: v })}
           min={0}
-          step={rule.when.metric === 'round' ? 1 : 10}
+          step={value.when.metric === 'round' ? 1 : 10}
         />
       </View>
-      <Text style={styles.hint}>{metricHint(rule.when.metric)}</Text>
+      <Text style={styles.hint}>{metricHint(value.when.metric)}</Text>
 
-      <Text style={styles.label}>Apply</Text>
+      <Text style={styles.label}>{applyLabel}</Text>
       <View style={styles.row}>
         <Segmented
           options={APPLIES.map((a) => ({ value: a, label: a }))}
-          value={rule.appliesTo}
+          value={value.appliesTo}
           onChange={(v) => patch({ appliesTo: v as AppliesTo })}
         />
         <Segmented
           options={ARITH_OPS.map((o) => ({ value: o, label: o }))}
-          value={rule.apply.op}
+          value={value.apply.op}
           onChange={(v) => patchApply({ op: v as ArithOp })}
         />
         <NumberStepper
-          value={rule.apply.value}
+          value={value.apply.value}
           onChange={(v) => patchApply({ value: v })}
           min={0}
-          step={rule.apply.op === '*' || rule.apply.op === '/' ? 0.5 : 1}
+          step={value.apply.op === '*' || value.apply.op === '/' ? 0.5 : 1}
         />
       </View>
     </View>
@@ -125,7 +155,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   cardTitle: { color: colors.textPrimary, fontWeight: '600' },
+  move: { color: colors.textMuted, fontSize: 16 },
   delete: { color: colors.accent },
   label: { color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.xs, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   hint: { color: colors.textMuted, fontSize: 11, marginTop: spacing.xs, lineHeight: 15 },

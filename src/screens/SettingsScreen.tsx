@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Profile, Timer } from '../types';
 import { uid } from '../utils/ids';
 import { planTotalSeconds } from '../engine/plan';
-import { describeRule } from '../engine/rules';
+import { describeRule, describeTrigger } from '../engine/rules';
 import { formatHMS } from '../utils/format';
 import { NumberStepper } from '../components/NumberStepper';
 import { TimerEditor } from '../components/TimerEditor';
@@ -46,7 +46,7 @@ export function SettingsScreen(props: Props) {
   const patchProfile = (p: Partial<Profile>) => onChangeProfile({ ...profile, ...p });
 
   const addTimer = () => {
-    const t: Timer = { id: uid('t_'), name: `Timer ${profile.timers.length + 1}`, durationSec: 60, rules: [] };
+    const t: Timer = { id: uid('t_'), name: `Timer ${profile.timers.length + 1}`, durationSec: 60, rules: [], triggers: [] };
     patchProfile({ timers: [...profile.timers, t] });
   };
 
@@ -59,6 +59,7 @@ export function SettingsScreen(props: Props) {
       id: uid('t_'),
       name: `${src.name} copy`,
       rules: src.rules.map((r) => ({ ...r, id: uid('r_') })),
+      triggers: (src.triggers ?? []).map((g) => ({ ...g, id: uid('g_') })),
     };
     const next = profile.timers.slice();
     next.splice(idx + 1, 0, copy);
@@ -127,7 +128,7 @@ export function SettingsScreen(props: Props) {
               <Pressable style={{ flex: 1 }} onPress={() => setEditingTimerId(t.id)}>
                 <Text style={styles.timerName}>{t.name}</Text>
                 <Text style={styles.timerMeta}>
-                  {t.durationSec}s · {t.rules.length} rule{t.rules.length === 1 ? '' : 's'}
+                  {t.durationSec}s · {(t.triggers ?? []).length} trigger{(t.triggers ?? []).length === 1 ? '' : 's'} · {t.rules.length} rule{t.rules.length === 1 ? '' : 's'}
                 </Text>
               </Pressable>
               <View style={styles.timerActions}>
@@ -145,8 +146,11 @@ export function SettingsScreen(props: Props) {
                 </Pressable>
               </View>
             </View>
-            {t.rules.length > 0 ? (
+            {(t.triggers ?? []).length > 0 || t.rules.length > 0 ? (
               <View style={styles.ruleSummary}>
+                {(t.triggers ?? []).map((g, i) => (
+                  <Text key={g.id} style={styles.ruleSummaryLine}>T{i + 1}: {describeTrigger(g)}</Text>
+                ))}
                 {t.rules.map((r) => (
                   <Text key={r.id} style={styles.ruleSummaryLine}>• {describeRule(r)}</Text>
                 ))}
