@@ -1,0 +1,53 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="glove" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff4d4d"/>
+      <stop offset="1" stop-color="#d61f1f"/>
+    </linearGradient>
+    <linearGradient id="cuff" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dfe3e6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- dark rounded background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#0d0d0d"/>
+
+  <!-- round-timer ring: ticks + progress arc around the glove -->
+  <g stroke="#2b2b2b" stroke-width="20" stroke-linecap="round">
+    <circle cx="512" cy="512" r="396" fill="none"/>
+  </g>
+  <!-- progress arc (about 3/4 of a round) -->
+  <path d="M 512 116
+           A 396 396 0 1 1 159 327"
+        fill="none" stroke="#ff4d4d" stroke-width="26" stroke-linecap="round"/>
+  <!-- stopwatch crown / start button at top -->
+  <rect x="476" y="70" width="72" height="46" rx="16" fill="#ff4d4d"/>
+
+  <!-- boxing glove, centred -->
+  <g transform="translate(512 540)">
+    <!-- main mitt -->
+    <path d="M -210 -150
+             C -210 -250, -120 -300, 30 -300
+             C 180 -300, 230 -210, 230 -100
+             C 230 30, 150 110, 30 110
+             L -150 110
+             C -200 110, -230 70, -230 10
+             Z" fill="url(#glove)"/>
+    <!-- thumb -->
+    <path d="M -210 -40
+             C -290 -40, -300 40, -255 80
+             C -225 105, -180 100, -160 70
+             C -185 30, -185 -10, -200 -40
+             Z" fill="url(#glove)"/>
+    <!-- knuckle seam -->
+    <path d="M 30 -270 C 30 -150, 30 -20, 30 90"
+          stroke="#a81414" stroke-width="22" stroke-linecap="round" fill="none"/>
+    <!-- highlight -->
+    <path d="M -150 -230 C -60 -262, 90 -255, 150 -210"
+          stroke="#ff7a7a" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.7"/>
+    <!-- wrist cuff -->
+    <rect x="-235" y="120" width="475" height="120" rx="56" fill="url(#cuff)"/>
+    <rect x="-235" y="120" width="475" height="34" rx="17" fill="#000000" opacity="0.06"/>
+  </g>
+</svg>
