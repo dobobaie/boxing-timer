@@ -27,6 +27,8 @@
       "bundler": "metro",
       "output": "single"
     },
-    "plugins": ["expo-av"]
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }
