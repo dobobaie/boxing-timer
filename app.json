@@ -28,7 +28,8 @@
       "output": "single"
     },
     "plugins": [
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }
