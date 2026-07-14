@@ -11,7 +11,10 @@ export type SessionState =
   | { kind: 'finished' };
 
 const PRE_COUNTDOWN_SEC = 3;
-const TICK_MS = 100;
+// 50ms (~20fps) so the millisecond/centisecond readout on the running timer
+// updates smoothly. Per-second beep dedup is keyed on the whole second, so a
+// faster tick doesn't fire extra beeps.
+const TICK_MS = 50;
 
 export function useTimerEngine(profile: Profile) {
   const plan = useMemo<PlanEntry[]>(() => buildPlan(profile), [profile]);

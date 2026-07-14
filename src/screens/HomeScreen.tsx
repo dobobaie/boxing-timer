@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Profile } from '../types';
 import { useTimerEngine } from '../engine/timer';
-import { formatHMS, formatMMSS } from '../utils/format';
+import { formatClock, formatHMS } from '../utils/format';
 import { colors, radii, spacing } from '../theme';
 
 type Props = {
@@ -84,12 +84,15 @@ function renderCenter(state: ReturnType<typeof useTimerEngine>['state'], current
     );
   }
   // running | paused
-  const remainingSec = Math.ceil(state.remainingMs / 1000);
+  const clock = formatClock(state.remainingMs);
   const name = currentEntry?.timerName ?? '';
   return (
     <>
       <Text style={styles.subLabel}>{name}{state.kind === 'paused' ? ' (paused)' : ''}</Text>
-      <Text style={styles.bigDigits}>{formatMMSS(remainingSec)}</Text>
+      <Text style={styles.bigDigits}>
+        {clock.main}
+        <Text style={styles.msDigits}>.{clock.cs}</Text>
+      </Text>
       <Text style={styles.entryHint}>
         {currentEntry ? `${currentEntry.durationSec}s configured` : ''}
       </Text>
@@ -131,6 +134,12 @@ const styles = StyleSheet.create({
   bigDigits: {
     color: colors.textPrimary,
     fontSize: 110,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  msDigits: {
+    color: colors.textMuted,
+    fontSize: 52,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
