@@ -64,7 +64,7 @@ export function HomeScreen({ profile, onOpenSettings }: Props) {
 
 function renderCenter(state: ReturnType<typeof useTimerEngine>['state'], currentEntry: ReturnType<typeof useTimerEngine>['currentEntry']) {
   if (state.kind === 'idle') {
-    return <Text style={styles.bigDigits}>Ready</Text>;
+    return <Text style={styles.bigDigits}>Ready!</Text>;
   }
   if (state.kind === 'countdown') {
     const sec = Math.ceil(state.remainingMs / 1000);
