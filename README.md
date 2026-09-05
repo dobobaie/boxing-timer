@@ -5,38 +5,57 @@ React Native (Expo SDK 54) boxing round / interval timer.
 ## Features
 
 - **One-tap start.** Opens straight to the active profile; tap **Start** to begin a 3-second pre-countdown (with beeps), then the configured timers run in order.
-- **Per-round timers.** A "round" is one full pass through the configured timer sequence (default: 60s **Rest** → 180s **Fight**). The session repeats for a configurable number of rounds.
-- **Audible cues.** Short beep on the last 3 seconds of each interval and a longer bell at 0 before auto-advancing to the next timer.
-- **Pause / Resume / Stop.** Mid-session controls.
-- **Top-bar HUD.** Total elapsed / total session time (top-left), current round X / Y (top-right).
-- **Settings.**
-  - Timers: add, remove (min 1 enforced), duplicate, reorder, rename, change duration.
-  - Total rounds.
-  - Per-timer rules (see below).
-- **Profiles.** Save the current timers + rounds as a named profile, switch between profiles, rename, delete. Two profiles ship by default: **Classic** (60s rest, 180s fight, 5 rounds) and **Pyramid** (see below).
-- **Rules.** Each timer can carry any number of rules that adjust its duration based on round number or total elapsed time. See [Rules](#rules) below.
+- **Two nested layers.** A *round* is one full pass through the timer sequence (default: 60s **Rest** → 180s **Fight**). A *cycle* is a full block of rounds, and a profile can repeat that block N times with a configurable rest in between — so a pyramid can climb-and-descend twice with a minute of breathing room between the two passes.
+- **Audible cues.** Short beep on the last 3 seconds of each interval and a longer bell at 0 before auto-advancing.
+- **Pause / Resume / Stop**, including during the pre-countdown.
+- **Background-safe clock.** The session is anchored to the wall clock, not to accumulated ticks, so a suspended or throttled JS thread (app backgrounded, device dozing) never loses time — coming back resyncs to the true position in one step, silently, instead of replaying every boundary it slept through.
+- **Screen stays awake** for as long as a session is active (`expo-keep-awake`), released as soon as it stops.
+- **Top-bar HUD.** Total elapsed / total session time (top-left); cycle + round position (top-right).
+- **Settings.** Profile picker, session structure (rounds, cycles, rest between cycles), the timer sequence inside one round, and the resulting total with an optional round-by-round breakdown. An **Advanced** switch in the header reveals the raw rule/trigger machine for power users.
+- **Profiles.** Create from a template (copy current / Classic / Pyramid / blank), switch, rename, duplicate, delete.
 
-## Rules
+## How a timer's length evolves
 
-Each rule has two parts:
+Most workouts are one of four shapes, so the timer editor offers them directly:
 
-| Part | Meaning |
+| Preset | Meaning |
 |---|---|
-| **When** | A condition on either the current `round` (1-based) or `totalTimeSec` (seconds elapsed in the session). |
-| **Apply** | An arithmetic operation (`+`, `-`, `*`, `/`) and a value, applied to either the timer's **base** duration or to the duration this timer used in its **previous** round. |
+| **Same every round** | Fixed duration. |
+| **Longer each round** | `+step` each round, optionally flattening at a cap. |
+| **Shorter each round** | `-step` each round, optionally flattening at a floor. |
+| **Pyramid** | `+step` up to a peak, then `-step` back down. |
+| **Custom** | Hand-written triggers and rules (below). |
 
-Rules are evaluated in array order; later matches overwrite earlier ones. `appliesTo: previous` is a no-op on the very first round for that timer (there is no "previous" yet).
+The editor shows a live per-round preview computed with the same function the
+engine runs, and recognises an existing timer's shape so a profile built by hand
+still opens on the right preset. Presets compile down to **triggers**; nothing
+special-cases them at runtime.
 
-### Example: Pyramid
+### Triggers and rules (advanced)
 
-The shipping **Pyramid** profile uses two rules on the **Fight** timer (base 10s):
+**Triggers** are a stateful, ordered state machine: at most one is active at a
+time, it applies its action every round, and it stays active until the *next*
+trigger's condition fires (which takes over). Progression is strictly forward —
+trigger 2 cannot fire before trigger 1 has. That is what expresses a pyramid:
 
-1. `when round <= 4 -> previous * 2` — doubles the previous round's fight.
-2. `when round >= 5 -> previous / 2` — halves the previous round's fight.
+1. `on round == 1 -> then previous + 10 each round` (ramp up)
+2. `on this timer >= 60 -> then previous - 10 each round` (ramp down)
 
-Result over 8 rounds: **10 → 20 → 40 → 80 → 40 → 20 → 10 → 5** seconds.
+Over 11 rounds a 10s Fight timer runs **10 → 20 → 30 → 40 → 50 → 60 → 50 → 40 → 30 → 20 → 10**. This is the shipping **Pyramid** profile.
 
-The math lives in [`src/engine/rules.ts`](src/engine/rules.ts) (pure function, easy to unit-test) and the full per-round schedule is pre-computed by [`src/engine/plan.ts`](src/engine/plan.ts) so the UI can show an accurate total session time even when rules are active.
+**Rules** are the stateless counterpart: every matching rule is re-checked each
+round and the last match wins. Each has a **When** (a condition on `round`, on
+`this timer`'s incoming length, or on total `elapsed` seconds) and an **Apply**
+(`+ - * /` against the timer's **base** duration or its **previous** round's
+value). `appliesTo: previous` is a no-op on a timer's first round.
+
+Rule/trigger carry-over state resets at the start of every cycle, so each cycle
+replays the same progression.
+
+The math lives in [`src/engine/rules.ts`](src/engine/rules.ts) (pure, testable),
+the presets in [`src/engine/presets.ts`](src/engine/presets.ts), and the full
+schedule is pre-computed by [`src/engine/plan.ts`](src/engine/plan.ts) so the UI
+can show an accurate total session time even when triggers are active.
 
 ## Project layout
 
@@ -44,26 +63,30 @@ The math lives in [`src/engine/rules.ts`](src/engine/rules.ts) (pure function, e
 App.tsx                       root: persistence + screen toggle
 index.ts                      Expo entry
 src/
-  types.ts                    Timer / Rule / Profile types
+  types.ts                    Timer / Rule / Trigger / Profile types
   theme.ts                    colors / radii / spacing
   utils/                      id + time-format helpers
   store/
-    defaults.ts               Classic + Pyramid seed profiles
-    storage.ts                AsyncStorage wrapper
+    defaults.ts               Classic + Pyramid seeds, templates, deep clone
+    storage.ts                AsyncStorage wrapper + schema migration
   engine/
-    rules.ts                  resolveTimerDuration() — pure, testable
-    plan.ts                   buildPlan() — flat (round, timer) schedule
-    timer.ts                  useTimerEngine() — state machine + tick loop
+    rules.ts                  resolveTimer() — pure, testable
+    presets.ts                progression <-> trigger compiler + detector
+    plan.ts                   buildPlan() — flat (cycle, round, timer) schedule
+    timer.ts                  useTimerEngine() — wall-clock anchored session
   sound/
-    beeps.ts                  expo-av wrapper around assets/beep-*.wav
+    beeps.ts                  expo-audio wrapper around assets/beep-*.wav
   screens/
     HomeScreen.tsx
     SettingsScreen.tsx
   components/
     NumberStepper.tsx
-    RuleEditor.tsx
+    DurationField.tsx         mm:ss entry with quick-pick chips
+    Segmented.tsx
+    ConditionEditor.tsx       shared editor for one rule or one trigger
     TimerEditor.tsx
     ProfileManager.tsx
+    SchedulePreview.tsx
 assets/
   icon.png
   beep-short.wav              ~150ms 880Hz (the 3-2-1 ticks)
@@ -82,4 +105,9 @@ npm run typecheck     # tsc --noEmit
 
 ## State persistence
 
-Everything lives in a single `AsyncStorage` key (`boxing-timer.state.v1`): the full `AppState` (all profiles + active id). State is saved automatically on every change.
+Everything lives in a single `AsyncStorage` key (`boxing-timer.state.v1`): the
+full `AppState` (all profiles + active id + the advanced-mode preference). State
+is saved automatically on every change, and `migrate()` in
+[`src/store/storage.ts`](src/store/storage.ts) fills in fields added by newer
+versions (a profile saved before cycles existed loads as a single cycle, i.e.
+unchanged behaviour).

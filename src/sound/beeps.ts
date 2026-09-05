@@ -11,9 +11,12 @@ export async function initBeeps(): Promise<void> {
     // going, without lowering (ducking) or pausing it. `mixWithOthers` makes
     // expo-audio skip requesting Android audio focus entirely, so background
     // music keeps playing at full volume while the gong still sounds over it.
+    // `shouldPlayInBackground` keeps the players alive once the app leaves the
+    // foreground, so a round-end gong is still audible when the user switched
+    // away or pocketed the phone mid-session.
     await setAudioModeAsync({
       playsInSilentMode: true,
-      shouldPlayInBackground: false,
+      shouldPlayInBackground: true,
       interruptionMode: 'mixWithOthers',
     });
     shortBeep = createAudioPlayer(require('../../assets/beep-short.wav'));

@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ComparisonOp, ArithOp, Metric, AppliesTo, RuleCondition, RuleAction } from '../types';
 import { NumberStepper } from './NumberStepper';
+import { Segmented } from './Segmented';
 import { colors, radii, spacing } from '../theme';
 
 const METRIC_OPTIONS: { value: Metric; label: string }[] = [
@@ -118,33 +119,6 @@ export function ConditionEditor({
   );
 }
 
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <View style={styles.seg}>
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <Pressable
-            key={opt.value}
-            style={[styles.segItem, active && styles.segItemActive]}
-            onPress={() => onChange(opt.value)}
-          >
-            <Text style={[styles.segText, active && styles.segTextActive]}>{opt.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
@@ -162,9 +136,4 @@ const styles = StyleSheet.create({
   label: { color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.xs, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   hint: { color: colors.textMuted, fontSize: 11, marginTop: spacing.xs, lineHeight: 15 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
-  seg: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: radii.sm, padding: 2 },
-  segItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radii.sm },
-  segItemActive: { backgroundColor: colors.accent },
-  segText: { color: colors.textMuted, fontSize: 13 },
-  segTextActive: { color: colors.textPrimary, fontWeight: '600' },
 });

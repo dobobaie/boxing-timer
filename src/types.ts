@@ -1,10 +1,10 @@
 export type ComparisonOp = '>' | '<' | '>=' | '<=' | '==';
 export type ArithOp = '+' | '-' | '*' | '/';
-// 'round'        -> the current round number (1-based)
+// 'round'        -> the current round number (1-based, restarts each cycle)
 // 'duration'     -> this timer's length coming into the round (previous round's
 //                   resolved value, or its base on round 1). Lets a rule react to
 //                   the timer's own size, e.g. grow until it reaches 60s then shrink.
-// 'totalTimeSec' -> seconds elapsed in the whole session so far (monotonic).
+// 'totalTimeSec' -> seconds elapsed in the whole session so far (monotonic across cycles).
 export type Metric = 'round' | 'duration' | 'totalTimeSec';
 export type AppliesTo = 'base' | 'previous';
 
@@ -52,10 +52,21 @@ export type Profile = {
   id: string;
   name: string;
   timers: Timer[];
+  /** Rounds inside one cycle. The timer sequence runs once per round. */
   totalRounds: number;
+  /**
+   * Outer layer: how many times the whole block of `totalRounds` rounds repeats.
+   * Each cycle restarts the rule/trigger state, so a pyramid climbs and descends
+   * again from the top. 1 = no outer layer (the classic behaviour).
+   */
+  cycles: number;
+  /** Rest inserted between two cycles. Ignored when `cycles` is 1. */
+  cycleRestSec: number;
 };
 
 export type AppState = {
   profiles: Profile[];
   activeProfileId: string;
+  /** Settings screen disclosure level. Off = only the everyday knobs are shown. */
+  advanced: boolean;
 };

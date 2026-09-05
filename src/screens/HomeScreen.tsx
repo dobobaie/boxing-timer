@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Profile } from '../types';
-import { useTimerEngine } from '../engine/timer';
+import { SessionState, useTimerEngine } from '../engine/timer';
+import { PlanEntry, profileCycles } from '../engine/plan';
 import { formatClock, formatHMS } from '../utils/format';
 import { colors, radii, spacing } from '../theme';
 
@@ -13,11 +14,8 @@ type Props = {
 export function HomeScreen({ profile, onOpenSettings }: Props) {
   const eng = useTimerEngine(profile);
   const { state, plan, totalSessionSec, elapsedSec, currentEntry, start, pause, resume, stop } = eng;
+  const cycles = profileCycles(profile);
 
-  const displayCenter = renderCenter(state, currentEntry);
-  const remainingTopRight = currentEntry
-    ? `Round ${currentEntry.round} / ${profile.totalRounds}`
-    : `Rounds: ${profile.totalRounds}`;
   const totalLeft =
     state.kind === 'idle'
       ? `Total: ${formatHMS(totalSessionSec)}`
@@ -27,28 +25,23 @@ export function HomeScreen({ profile, onOpenSettings }: Props) {
     <View style={styles.root}>
       <View style={styles.topBar}>
         <Text style={styles.metaLeft}>{totalLeft}</Text>
-        <Text style={styles.metaRight}>{remainingTopRight}</Text>
+        <Text style={styles.metaRight}>{positionLabel(currentEntry, profile, cycles)}</Text>
       </View>
 
       <View style={styles.center}>
         <Text style={styles.profileName}>{profile.name}</Text>
-        {displayCenter}
+        {renderCenter(state, currentEntry)}
       </View>
 
       <View style={styles.controlsRow}>
         {state.kind === 'idle' || state.kind === 'finished' ? (
           <BigButton label="Start" tone="accent" onPress={start} />
-        ) : state.kind === 'running' || state.kind === 'countdown' ? (
-          <BigButton label="Pause" tone="warn" onPress={pause} />
-        ) : (
+        ) : state.kind === 'paused' ? (
           <BigButton label="Resume" tone="accent" onPress={resume} />
+        ) : (
+          <BigButton label="Pause" tone="warn" onPress={pause} />
         )}
-        <BigButton
-          label="Stop"
-          tone="neutral"
-          onPress={stop}
-          disabled={state.kind === 'idle'}
-        />
+        <BigButton label="Stop" tone="neutral" onPress={stop} disabled={state.kind === 'idle'} />
       </View>
 
       <Pressable style={styles.settingsCog} onPress={onOpenSettings}>
@@ -62,18 +55,21 @@ export function HomeScreen({ profile, onOpenSettings }: Props) {
   );
 }
 
-function renderCenter(state: ReturnType<typeof useTimerEngine>['state'], currentEntry: ReturnType<typeof useTimerEngine>['currentEntry']) {
+/** "Cycle 1/2 · Round 3/20" — the cycle half is dropped when there is only one. */
+function positionLabel(entry: PlanEntry | null, profile: Profile, cycles: number): string {
+  if (!entry) {
+    return cycles > 1
+      ? `${profile.totalRounds} rounds × ${cycles} cycles`
+      : `Rounds: ${profile.totalRounds}`;
+  }
+  const cyclePart = cycles > 1 ? `Cycle ${entry.cycle}/${cycles} · ` : '';
+  if (entry.kind === 'cycleRest') return `${cyclePart}Cycle rest`;
+  return `${cyclePart}Round ${entry.round}/${profile.totalRounds}`;
+}
+
+function renderCenter(state: SessionState, currentEntry: PlanEntry | null) {
   if (state.kind === 'idle') {
     return <Text style={styles.bigDigits}>Ready!</Text>;
-  }
-  if (state.kind === 'countdown') {
-    const sec = Math.ceil(state.remainingMs / 1000);
-    return (
-      <>
-        <Text style={styles.subLabel}>Get ready</Text>
-        <Text style={[styles.bigDigits, styles.countdownDigits]}>{sec}</Text>
-      </>
-    );
   }
   if (state.kind === 'finished') {
     return (
@@ -83,12 +79,30 @@ function renderCenter(state: ReturnType<typeof useTimerEngine>['state'], current
       </>
     );
   }
-  // running | paused
+
+  const paused = state.kind === 'paused';
+  // Pausing during the pre-countdown leaves us with no entry — show the same
+  // "Get ready" face, just frozen.
+  const inCountdown = state.kind === 'countdown' || (paused && state.resumeKind === 'countdown');
+
+  if (inCountdown) {
+    const sec = Math.ceil(state.remainingMs / 1000);
+    return (
+      <>
+        <Text style={styles.subLabel}>Get ready{paused ? ' (paused)' : ''}</Text>
+        <Text style={[styles.bigDigits, styles.countdownDigits]}>{sec}</Text>
+      </>
+    );
+  }
+
   const clock = formatClock(state.remainingMs);
   const name = currentEntry?.timerName ?? '';
   return (
     <>
-      <Text style={styles.subLabel}>{name}{state.kind === 'paused' ? ' (paused)' : ''}</Text>
+      <Text style={styles.subLabel}>
+        {name}
+        {paused ? ' (paused)' : ''}
+      </Text>
       <Text style={styles.bigDigits}>
         {clock.main}
         <Text style={styles.msDigits}>.{clock.cs}</Text>

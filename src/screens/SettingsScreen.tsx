@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Profile, Timer } from '../types';
 import { uid } from '../utils/ids';
-import { planTotalSeconds } from '../engine/plan';
-import { describeRule, describeTrigger } from '../engine/rules';
-import { formatHMS } from '../utils/format';
+import { planTotalSeconds, profileCycles, profileCycleRestSec } from '../engine/plan';
+import { describeTimer } from '../engine/presets';
+import { formatDuration, formatHMS } from '../utils/format';
+import { ProfileTemplate } from '../store/defaults';
 import { NumberStepper } from '../components/NumberStepper';
+import { DurationField } from '../components/DurationField';
 import { TimerEditor } from '../components/TimerEditor';
 import { ProfileManager } from '../components/ProfileManager';
 import { SchedulePreview } from '../components/SchedulePreview';
@@ -14,21 +16,32 @@ import { colors, radii, spacing } from '../theme';
 type Props = {
   profiles: Profile[];
   activeProfileId: string;
+  advanced: boolean;
+  onSetAdvanced: (v: boolean) => void;
   onChangeProfile: (p: Profile) => void;
   onSwitchProfile: (id: string) => void;
-  onCreateProfileFromCurrent: (name: string) => void;
+  onCreateProfile: (template: ProfileTemplate, name: string, sourceId?: string) => void;
   onRenameProfile: (id: string, name: string) => void;
   onDeleteProfile: (id: string) => void;
   onBack: () => void;
 };
 
+/**
+ * Settings is organised top-down as the session actually reads:
+ *   which profile  ->  how the session is shaped (cycles/rounds)  ->  what a
+ *   round contains (the timer sequence)  ->  what that adds up to.
+ * Everything a beginner never needs — the raw trigger/rule machine and the
+ * round-by-round breakdown — sits behind the Advanced switch in the header.
+ */
 export function SettingsScreen(props: Props) {
   const {
     profiles,
     activeProfileId,
+    advanced,
+    onSetAdvanced,
     onChangeProfile,
     onSwitchProfile,
-    onCreateProfileFromCurrent,
+    onCreateProfile,
     onRenameProfile,
     onDeleteProfile,
     onBack,
@@ -40,14 +53,27 @@ export function SettingsScreen(props: Props) {
   );
   const [editingTimerId, setEditingTimerId] = useState<string | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const total = useMemo(() => planTotalSeconds(profile), [profile]);
+  const cycles = profileCycles(profile);
+  const roundSec = useMemo(
+    () => profile.timers.reduce((s, t) => s + t.durationSec, 0),
+    [profile.timers]
+  );
 
   const patchProfile = (p: Partial<Profile>) => onChangeProfile({ ...profile, ...p });
 
   const addTimer = () => {
-    const t: Timer = { id: uid('t_'), name: `Timer ${profile.timers.length + 1}`, durationSec: 60, rules: [], triggers: [] };
+    const t: Timer = {
+      id: uid('t_'),
+      name: profile.timers.length % 2 === 0 ? 'Work' : 'Rest',
+      durationSec: 60,
+      rules: [],
+      triggers: [],
+    };
     patchProfile({ timers: [...profile.timers, t] });
+    setEditingTimerId(t.id);
   };
 
   const duplicateTimer = (id: string) => {
@@ -67,7 +93,7 @@ export function SettingsScreen(props: Props) {
   };
 
   const removeTimer = (id: string) => {
-    if (profile.timers.length <= 1) return; // min 1 enforced
+    if (profile.timers.length <= 1) return; // a round needs at least one timer
     patchProfile({ timers: profile.timers.filter((t) => t.id !== id) });
   };
 
@@ -89,89 +115,198 @@ export function SettingsScreen(props: Props) {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable onPress={onBack}><Text style={styles.back}>← Back</Text></Pressable>
-        <Text style={styles.title}>Settings</Text>
-        <Pressable onPress={() => setProfileModalOpen(true)}>
-          <Text style={styles.profileBtn}>Profiles</Text>
+        <Pressable onPress={onBack} hitSlop={12}>
+          <Text style={styles.back}>← Back</Text>
         </Pressable>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.profilePill}>
-          <Text style={styles.profilePillLabel}>Profile</Text>
-          <Text style={styles.profilePillName}>{profile.name}</Text>
-          <Text style={styles.profilePillTotal}>Total {formatHMS(total)}</Text>
-        </View>
-
-        <Text style={styles.section}>Rounds</Text>
-        <View style={styles.roundsRow}>
-          <Text style={styles.bodyText}>Total rounds</Text>
-          <NumberStepper
-            value={profile.totalRounds}
-            onChange={(v) => patchProfile({ totalRounds: Math.max(1, Math.round(v)) })}
-            min={1}
-            step={1}
-            width={130}
+        <Text style={styles.title}>Settings</Text>
+        <View style={styles.advancedToggle}>
+          <Text style={styles.advancedLabel}>Advanced</Text>
+          <Switch
+            value={advanced}
+            onValueChange={onSetAdvanced}
+            trackColor={{ false: colors.surfaceAlt, true: colors.accentDark }}
+            thumbColor={advanced ? colors.accent : colors.textMuted}
           />
         </View>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Profile ---------------------------------------------------------- */}
+        <Pressable style={styles.profileCard} onPress={() => setProfileModalOpen(true)}>
+          <View style={styles.profileCardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.profileLabel}>Profile</Text>
+              <Text style={styles.profileName}>{profile.name}</Text>
+            </View>
+            <Text style={styles.switchLink}>Switch ›</Text>
+          </View>
+          <View style={styles.chips}>
+            <Chip text={`${profile.totalRounds} round${profile.totalRounds === 1 ? '' : 's'}`} />
+            {cycles > 1 ? <Chip text={`× ${cycles} cycles`} /> : null}
+            <Chip
+              text={`${profile.timers.length} timer${profile.timers.length === 1 ? '' : 's'} / round`}
+            />
+            <Chip text={`Total ${formatHMS(total)}`} accent />
+          </View>
+        </Pressable>
+
+        {/* Structure -------------------------------------------------------- */}
+        <Text style={styles.section}>Session structure</Text>
+        <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>Rounds per cycle</Text>
+              <Text style={styles.settingHint}>
+                One round runs the whole timer sequence below ({formatDuration(roundSec)} at base
+                lengths).
+              </Text>
+            </View>
+            <NumberStepper
+              value={profile.totalRounds}
+              onChange={(v) => patchProfile({ totalRounds: Math.max(1, Math.round(v)) })}
+              min={1}
+              step={1}
+              width={130}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>Cycles</Text>
+              <Text style={styles.settingHint}>
+                Repeat the whole block of rounds. A pyramid set to 2 cycles climbs and descends
+                twice.
+              </Text>
+            </View>
+            <NumberStepper
+              value={cycles}
+              onChange={(v) => patchProfile({ cycles: Math.max(1, Math.round(v)) })}
+              min={1}
+              step={1}
+              width={130}
+            />
+          </View>
+
+          {cycles > 1 ? (
+            <>
+              <View style={styles.divider} />
+              <View>
+                <Text style={styles.settingLabel}>Rest between cycles</Text>
+                <Text style={styles.settingHint}>
+                  Inserted after each cycle except the last.
+                </Text>
+                <View style={{ marginTop: spacing.sm }}>
+                  <DurationField
+                    valueSec={profileCycleRestSec(profile)}
+                    minSec={0}
+                    presets={[0, 30, 60, 120, 300]}
+                    onChange={(sec) => patchProfile({ cycleRestSec: sec })}
+                  />
+                </View>
+              </View>
+            </>
+          ) : null}
+        </View>
+
+        {/* Timers ----------------------------------------------------------- */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.section}>Timers</Text>
+          <Text style={styles.section}>Inside one round</Text>
           <Pressable onPress={addTimer} style={styles.addBtn}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+            <Text style={styles.addBtnText}>+ Add timer</Text>
           </Pressable>
         </View>
+        <Text style={styles.sectionHint}>
+          These run in order, every round. Tap one to change its length or how it evolves.
+        </Text>
 
         {profile.timers.map((t, idx) => (
           <View key={t.id} style={styles.timerCard}>
-            <View style={styles.timerCardHeader}>
-              <Pressable style={{ flex: 1 }} onPress={() => setEditingTimerId(t.id)}>
+            <Pressable style={styles.timerMain} onPress={() => setEditingTimerId(t.id)}>
+              <Text style={styles.timerOrder}>{idx + 1}</Text>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.timerName}>{t.name}</Text>
-                <Text style={styles.timerMeta}>
-                  {t.durationSec}s · {(t.triggers ?? []).length} trigger{(t.triggers ?? []).length === 1 ? '' : 's'} · {t.rules.length} rule{t.rules.length === 1 ? '' : 's'}
+                <Text style={styles.timerDesc}>{describeTimer(t)}</Text>
+              </View>
+              <Text style={styles.timerChevron}>›</Text>
+            </Pressable>
+            <View style={styles.timerActions}>
+              <Pressable onPress={() => moveTimer(t.id, -1)} disabled={idx === 0} hitSlop={8}>
+                <Text style={[styles.timerAction, idx === 0 && styles.timerActionDisabled]}>
+                  ↑
                 </Text>
               </Pressable>
-              <View style={styles.timerActions}>
-                <Pressable onPress={() => moveTimer(t.id, -1)} disabled={idx === 0}>
-                  <Text style={[styles.timerAction, idx === 0 && styles.timerActionDisabled]}>↑</Text>
-                </Pressable>
-                <Pressable onPress={() => moveTimer(t.id, 1)} disabled={idx === profile.timers.length - 1}>
-                  <Text style={[styles.timerAction, idx === profile.timers.length - 1 && styles.timerActionDisabled]}>↓</Text>
-                </Pressable>
-                <Pressable onPress={() => duplicateTimer(t.id)}>
-                  <Text style={styles.timerAction}>copy</Text>
-                </Pressable>
-                <Pressable onPress={() => removeTimer(t.id)} disabled={profile.timers.length <= 1}>
-                  <Text style={[styles.timerAction, styles.timerActionDanger, profile.timers.length <= 1 && styles.timerActionDisabled]}>×</Text>
-                </Pressable>
-              </View>
+              <Pressable
+                onPress={() => moveTimer(t.id, 1)}
+                disabled={idx === profile.timers.length - 1}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    styles.timerAction,
+                    idx === profile.timers.length - 1 && styles.timerActionDisabled,
+                  ]}
+                >
+                  ↓
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => duplicateTimer(t.id)} hitSlop={8}>
+                <Text style={styles.timerAction}>Duplicate</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => removeTimer(t.id)}
+                disabled={profile.timers.length <= 1}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    styles.timerAction,
+                    styles.timerActionDanger,
+                    profile.timers.length <= 1 && styles.timerActionDisabled,
+                  ]}
+                >
+                  Remove
+                </Text>
+              </Pressable>
             </View>
-            {(t.triggers ?? []).length > 0 || t.rules.length > 0 ? (
-              <View style={styles.ruleSummary}>
-                {(t.triggers ?? []).map((g, i) => (
-                  <Text key={g.id} style={styles.ruleSummaryLine}>T{i + 1}: {describeTrigger(g)}</Text>
-                ))}
-                {t.rules.map((r) => (
-                  <Text key={r.id} style={styles.ruleSummaryLine}>• {describeRule(r)}</Text>
-                ))}
-              </View>
-            ) : null}
           </View>
         ))}
 
-        <Text style={styles.disclaimer}>
-          Tap a timer name to edit its duration and rules. Add rules to grow/shrink durations
-          based on the round number, the timer's own length, or total elapsed time.
-        </Text>
-
-        <Text style={styles.section}>Schedule</Text>
-        <SchedulePreview profile={profile} />
+        {/* Total / schedule -------------------------------------------------- */}
+        <Text style={styles.section}>Session total</Text>
+        <View style={styles.card}>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalValue}>{formatHMS(total)}</Text>
+            <Text style={styles.totalHint}>
+              {cycles > 1
+                ? `${cycles} cycles × ${profile.totalRounds} rounds`
+                : `${profile.totalRounds} rounds`}
+            </Text>
+          </View>
+          <Pressable onPress={() => setScheduleOpen((o) => !o)} style={styles.disclosure}>
+            <Text style={styles.disclosureText}>
+              {scheduleOpen ? 'Hide round-by-round breakdown' : 'Show round-by-round breakdown'}
+            </Text>
+          </Pressable>
+          {scheduleOpen ? (
+            <View style={{ marginTop: spacing.sm }}>
+              <SchedulePreview profile={profile} />
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
 
-      <Modal visible={editingTimer !== null} animationType="slide" onRequestClose={() => setEditingTimerId(null)}>
+      <Modal
+        visible={editingTimer !== null}
+        animationType="slide"
+        onRequestClose={() => setEditingTimerId(null)}
+      >
         {editingTimer ? (
           <TimerEditor
             timer={editingTimer}
+            rounds={profile.totalRounds}
+            advanced={advanced}
             onChange={(next) => updateTimer(editingTimer.id, () => next)}
             onClose={() => setEditingTimerId(null)}
           />
@@ -187,10 +322,18 @@ export function SettingsScreen(props: Props) {
           onSwitchProfile(id);
           setProfileModalOpen(false);
         }}
-        onCreateFromCurrent={onCreateProfileFromCurrent}
+        onCreate={onCreateProfile}
         onRename={onRenameProfile}
         onDelete={onDeleteProfile}
       />
+    </View>
+  );
+}
+
+function Chip({ text, accent }: { text: string; accent?: boolean }) {
+  return (
+    <View style={[styles.chip, accent && styles.chipAccent]}>
+      <Text style={[styles.chipText, accent && styles.chipTextAccent]}>{text}</Text>
     </View>
   );
 }
@@ -207,34 +350,114 @@ const styles = StyleSheet.create({
   },
   back: { color: colors.accent, fontSize: 16 },
   title: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },
-  profileBtn: { color: colors.accent },
+  advancedToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  advancedLabel: { color: colors.textMuted, fontSize: 12 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  profilePill: {
+
+  profileCard: {
     backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.accent,
     padding: spacing.md,
+  },
+  profileCardTop: { flexDirection: 'row', alignItems: 'center' },
+  profileLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  profileName: { color: colors.textPrimary, fontSize: 22, fontWeight: '700', marginTop: 2 },
+  switchLink: { color: colors.accent, fontWeight: '600' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.md },
+  chip: {
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  chipAccent: { backgroundColor: colors.accentDark },
+  chipText: { color: colors.textMuted, fontSize: 11 },
+  chipTextAccent: { color: colors.textPrimary, fontWeight: '600' },
+
+  section: {
+    color: colors.textMuted,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  sectionHint: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm, lineHeight: 17 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  addBtn: {
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+  },
+  addBtnText: { color: colors.accent, fontWeight: '600', fontSize: 13 },
+
+  card: {
+    backgroundColor: colors.surface,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    padding: spacing.md,
   },
-  profilePillLabel: { color: colors.textMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
-  profilePillName: { color: colors.textPrimary, fontSize: 20, fontWeight: '600', marginTop: 2 },
-  profilePillTotal: { color: colors.textMuted, marginTop: spacing.xs, fontVariant: ['tabular-nums'] },
-  section: { color: colors.textMuted, marginTop: spacing.md, marginBottom: spacing.sm, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.sm },
-  addBtn: { backgroundColor: colors.surfaceAlt, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radii.pill },
-  addBtnText: { color: colors.accent, fontWeight: '600' },
-  bodyText: { color: colors.textPrimary },
-  roundsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surface, padding: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
-  timerCard: { backgroundColor: colors.surface, borderRadius: radii.md, padding: spacing.md, marginVertical: spacing.xs, borderWidth: 1, borderColor: colors.border },
-  timerCardHeader: { flexDirection: 'row', alignItems: 'center' },
-  timerName: { color: colors.textPrimary, fontSize: 16 },
-  timerMeta: { color: colors.textMuted, marginTop: 2, fontSize: 12 },
-  timerActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  timerAction: { color: colors.textMuted, fontSize: 16, paddingHorizontal: spacing.xs },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingText: { flex: 1, paddingRight: spacing.md },
+  settingLabel: { color: colors.textPrimary, fontSize: 15 },
+  settingHint: { color: colors.textMuted, fontSize: 12, marginTop: 2, lineHeight: 16 },
+
+  timerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  timerMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  timerOrder: {
+    color: colors.textMuted,
+    fontSize: 12,
+    width: 20,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  timerName: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
+  timerDesc: { color: colors.textMuted, fontSize: 12, marginTop: 2, lineHeight: 16 },
+  timerChevron: { color: colors.textMuted, fontSize: 20 },
+  timerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  timerAction: { color: colors.textMuted, fontSize: 14 },
   timerActionDanger: { color: colors.accent },
   timerActionDisabled: { opacity: 0.3 },
-  ruleSummary: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
-  ruleSummaryLine: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
-  disclaimer: { color: colors.textMuted, fontSize: 12, marginTop: spacing.lg, lineHeight: 18 },
+
+  totalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  totalValue: {
+    color: colors.textPrimary,
+    fontSize: 30,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  totalHint: { color: colors.textMuted, fontSize: 12 },
+  disclosure: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  disclosureText: { color: colors.accent, fontSize: 13 },
 });

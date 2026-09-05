@@ -55,6 +55,9 @@ const styles = StyleSheet.create({
   btnTxt: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },
   input: {
     flex: 1,
+    // Without an explicit minWidth the underlying web <input> refuses to shrink
+    // below its intrinsic size and pushes the "+" button out of the row.
+    minWidth: 0,
     color: colors.textPrimary,
     textAlign: 'center',
     paddingHorizontal: spacing.xs,

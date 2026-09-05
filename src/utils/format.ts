@@ -21,6 +21,16 @@ export function formatClock(totalMs: number): { main: string; cs: string } {
   };
 }
 
+/**
+ * Compact, human duration for labels and summaries: "45s", "3:00", "1:02:30".
+ * Short values keep the seconds suffix so "45s" doesn't read as 45 minutes.
+ */
+export function formatDuration(totalSec: number): string {
+  const safe = Math.max(0, Math.round(totalSec));
+  if (safe < 60) return `${safe}s`;
+  return formatHMS(safe);
+}
+
 export function formatHMS(totalSec: number): string {
   const safe = Math.max(0, Math.floor(totalSec));
   const h = Math.floor(safe / 3600);

@@ -19,12 +19,20 @@ export async function loadState(): Promise<AppState> {
   return seedState();
 }
 
-/** Normalize state loaded from older app versions (e.g. timers without `triggers`). */
+/**
+ * Normalize state loaded from older app versions: timers without `triggers`,
+ * profiles without the outer cycle layer, no advanced-mode preference. Defaults
+ * are chosen so an existing profile behaves exactly as it did before (a single
+ * cycle is the old single-layer session).
+ */
 function migrate(state: AppState): AppState {
   return {
     ...state,
+    advanced: state.advanced ?? false,
     profiles: state.profiles.map((p) => ({
       ...p,
+      cycles: Math.max(1, Math.round(p.cycles ?? 1)),
+      cycleRestSec: Math.max(0, Math.round(p.cycleRestSec ?? 60)),
       timers: (p.timers ?? []).map((t) => ({
         ...t,
         rules: t.rules ?? [],
@@ -44,6 +52,7 @@ export function seedState(): AppState {
   return {
     profiles: [classic, pyramid],
     activeProfileId: classic.id,
+    advanced: false,
   };
 }
 
