@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Keeps the process scheduled while the screen is off, so the JS tick that
+       fires the round-end gong keeps running. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <!-- Android 14+ requires the permission matching the service's declared type. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <!-- Android 13+: without it the ongoing notification is hidden. The service
+       (and therefore the audio) still runs, so this one is a nice-to-have. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <!-- Fully qualified: a library manifest has no package of its own, so a
+         relative ".Name" would be resolved against the *app* package. -->
+    <service
+      android:name="expo.modules.backgroundsession.BackgroundSessionService"
+      android:exported="false"
+      android:stopWithTask="true"
+      android:foregroundServiceType="mediaPlayback" />
+  </application>
+</manifest>

@@ -3,7 +3,16 @@ import { AppState as RNAppState, AppStateStatus } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Profile } from '../types';
 import { buildPlan, PlanEntry } from './plan';
+import { notificationLine } from './labels';
+import { buildCueSchedule } from './background';
 import { playLongBeep, playShortBeep } from '../sound/beeps';
+import {
+  addStopRequestListener,
+  pauseBackgroundSession,
+  requestNotificationPermission,
+  startBackgroundSession,
+  stopBackgroundSession,
+} from '../../modules/background-session';
 
 export type SessionState =
   | { kind: 'idle' }
@@ -26,6 +35,10 @@ const TICK_MS = 50;
 // silent rather than firing a burst of beeps for boundaries already in the past.
 const CATCHUP_GAP_MS = 1000;
 const KEEP_AWAKE_TAG = 'boxing-timer-session';
+// Safety cap handed to the native wake lock: the session's own length plus room
+// for pauses. The service releases the lock when it stops, so this only matters
+// if the process dies without ever calling stop.
+const WAKE_LOCK_SLACK_MS = 30 * 60 * 1000;
 
 /**
  * How the session is anchored. Everything the UI shows is *derived* from a
@@ -46,6 +59,8 @@ export function useTimerEngine(profile: Profile) {
   const plan = useMemo<PlanEntry[]>(() => buildPlan(profile), [profile]);
   const planRef = useRef(plan);
   planRef.current = plan;
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
 
   const [session, setSession] = useState<Session>({ status: 'idle' });
   const sessionRef = useRef(session);
@@ -61,6 +76,10 @@ export function useTimerEngine(profile: Profile) {
   // beep dedup resets cleanly at each boundary.
   const phaseTagRef = useRef<string>('');
   const lastBeepSecRef = useRef<number>(-1);
+  // True once the Android foreground service has taken over the cues. It plays
+  // them from a native schedule that survives the JS thread being frozen, so JS
+  // must stay quiet or every beep would sound twice.
+  const nativeCuesRef = useRef(false);
 
   /** Locate the session at `elapsedMs` (measured from the start of the pre-countdown). */
   const positionAt = useCallback((elapsedMs: number): Position => {
@@ -87,9 +106,14 @@ export function useTimerEngine(profile: Profile) {
   /**
    * Fire the audio cues for the position we are at now. `silent` is set when we
    * just resynced after a suspension — the boundaries we skipped are history.
+   *
+   * A no-op for audio once the foreground service owns the cues; the phase
+   * bookkeeping still runs so that turning the service off mid-session (it
+   * failing to start, say) picks up cleanly.
    */
   const emitCues = useCallback(
     (pos: Position, silent: boolean) => {
+      const mute = silent || nativeCuesRef.current;
       const tag =
         pos.kind === 'countdown'
           ? 'pre'
@@ -98,7 +122,7 @@ export function useTimerEngine(profile: Profile) {
             : 'end';
       if (tag !== phaseTagRef.current) {
         // Entering a new phase == the previous phase hit zero: long beep, once.
-        if (phaseTagRef.current !== '' && !silent) void playLongBeep();
+        if (phaseTagRef.current !== '' && !mute) void playLongBeep();
         phaseTagRef.current = tag;
         lastBeepSecRef.current = -1;
       }
@@ -106,7 +130,7 @@ export function useTimerEngine(profile: Profile) {
         const secLeft = Math.ceil(pos.remainingMs / 1000);
         if (secLeft !== lastBeepSecRef.current) {
           lastBeepSecRef.current = secLeft;
-          if (!silent && secLeft >= 1 && secLeft <= 3) void playShortBeep();
+          if (!mute && secLeft >= 1 && secLeft <= 3) void playShortBeep();
         }
       }
     },
@@ -125,10 +149,38 @@ export function useTimerEngine(profile: Profile) {
       const pos = positionAt(now - s.anchorMs);
       emitCues(pos, silent);
       setNowMs(now);
-      if (pos.kind === 'finished') stopInterval();
+      if (pos.kind === 'finished') {
+        stopInterval();
+        // The service stops itself on the last cue; this covers the case where
+        // the app was in the foreground the whole time and got there first.
+        nativeCuesRef.current = false;
+        stopBackgroundSession();
+      }
     },
     [emitCues, positionAt, stopInterval]
   );
+
+  /**
+   * Hand the whole remaining session to the foreground service. Called on start
+   * and again on resume, since resuming moves every boundary.
+   */
+  const armBackgroundSession = useCallback((anchorMs: number) => {
+    const plannedMs =
+      PRE_COUNTDOWN_MS + planRef.current.reduce((sum, e) => sum + e.durationSec, 0) * 1000;
+    const schedule = buildCueSchedule(anchorMs, PRE_COUNTDOWN_MS, planRef.current, profileRef.current);
+    const line = notificationLine(
+      positionAt(Date.now() - anchorMs),
+      planRef.current,
+      profileRef.current,
+      false
+    );
+    nativeCuesRef.current = startBackgroundSession(
+      profileRef.current.name,
+      line,
+      schedule,
+      plannedMs + WAKE_LOCK_SLACK_MS
+    );
+  }, [positionAt]);
 
   const startInterval = useCallback(() => {
     if (intervalRef.current) return;
@@ -148,8 +200,16 @@ export function useTimerEngine(profile: Profile) {
     sessionRef.current = next;
     setSession(next);
     setNowMs(now);
+
+    // Hand the schedule over before the first tick, so the beeps are already
+    // native if the user pockets the phone straight away. The permission prompt
+    // is fire-and-forget: denying it only hides the notification, the service
+    // (and the gong) run either way.
+    armBackgroundSession(now);
+    void requestNotificationPermission();
+
     startInterval();
-  }, [startInterval]);
+  }, [armBackgroundSession, startInterval]);
 
   const pause = useCallback(() => {
     const prev = sessionRef.current;
@@ -159,29 +219,48 @@ export function useTimerEngine(profile: Profile) {
     const next: Session = { status: 'paused', elapsedMs };
     sessionRef.current = next;
     setSession(next);
-  }, [stopInterval]);
+    // Keep the service up while paused — the notification is how the user gets
+    // back to (or stops) a session they parked — but freeze its schedule.
+    pauseBackgroundSession(
+      profileRef.current.name,
+      notificationLine(positionAt(elapsedMs), planRef.current, profileRef.current, true)
+    );
+  }, [positionAt, stopInterval]);
 
   const resume = useCallback(() => {
     const prev = sessionRef.current;
     if (prev.status !== 'paused') return;
     const now = Date.now();
     lastEvalMsRef.current = now;
-    const next: Session = { status: 'running', anchorMs: now - prev.elapsedMs };
+    const anchorMs = now - prev.elapsedMs;
+    const next: Session = { status: 'running', anchorMs };
     sessionRef.current = next;
     setSession(next);
     setNowMs(now);
+    // Every boundary moved by the length of the pause, so the service needs the
+    // whole schedule again rather than an unfreeze.
+    armBackgroundSession(anchorMs);
     startInterval();
-  }, [startInterval]);
+  }, [armBackgroundSession, startInterval]);
 
   const stop = useCallback(() => {
     stopInterval();
     phaseTagRef.current = '';
     lastBeepSecRef.current = -1;
+    nativeCuesRef.current = false;
     sessionRef.current = { status: 'idle' };
     setSession({ status: 'idle' });
+    stopBackgroundSession();
   }, [stopInterval]);
 
   // --- background handling --------------------------------------------------
+
+  // "Stop" on the ongoing notification: the service relays the tap here, since
+  // the session state lives in JS and only `stop()` can unwind it cleanly.
+  useEffect(() => {
+    const sub = addStopRequestListener(() => stop());
+    return () => sub.remove();
+  }, [stop]);
 
   // Coming back to the foreground, resync immediately (and silently) instead of
   // waiting up to TICK_MS and replaying every boundary we slept through.
@@ -214,8 +293,15 @@ export function useTimerEngine(profile: Profile) {
     };
   }, [sessionActive]);
 
-  // Cleanup on unmount.
-  useEffect(() => stopInterval, [stopInterval]);
+  // Cleanup on unmount. The session state dies with the hook, so the service
+  // has to go too — otherwise the notification outlives the timer driving it.
+  useEffect(
+    () => () => {
+      stopInterval();
+      stopBackgroundSession();
+    },
+    [stopInterval]
+  );
 
   // --- derived display values ----------------------------------------------
 

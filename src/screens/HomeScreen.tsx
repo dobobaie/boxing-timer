@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Profile } from '../types';
 import { SessionState, useTimerEngine } from '../engine/timer';
 import { PlanEntry, profileCycles } from '../engine/plan';
+import { positionLabel } from '../engine/labels';
 import { formatClock, formatHMS } from '../utils/format';
 import { colors, radii, spacing } from '../theme';
 
@@ -53,18 +54,6 @@ export function HomeScreen({ profile, onOpenSettings }: Props) {
       ) : null}
     </View>
   );
-}
-
-/** "Cycle 1/2 · Round 3/20" — the cycle half is dropped when there is only one. */
-function positionLabel(entry: PlanEntry | null, profile: Profile, cycles: number): string {
-  if (!entry) {
-    return cycles > 1
-      ? `${profile.totalRounds} rounds × ${cycles} cycles`
-      : `Rounds: ${profile.totalRounds}`;
-  }
-  const cyclePart = cycles > 1 ? `Cycle ${entry.cycle}/${cycles} · ` : '';
-  if (entry.kind === 'cycleRest') return `${cyclePart}Cycle rest`;
-  return `${cyclePart}Round ${entry.round}/${profile.totalRounds}`;
 }
 
 function renderCenter(state: SessionState, currentEntry: PlanEntry | null) {

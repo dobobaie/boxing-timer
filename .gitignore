@@ -2,8 +2,13 @@ node_modules/
 .expo/
 dist/
 web-build/
-android/
-ios/
+# Anchored: only the prebuild output at the repo root. A bare "android/" would
+# also swallow modules/*/android, which is hand-written source.
+/android/
+/ios/
+# Gradle output inside the local Expo modules.
+modules/*/android/build/
+modules/*/android/.gradle/
 *.log
 .DS_Store
 .env
