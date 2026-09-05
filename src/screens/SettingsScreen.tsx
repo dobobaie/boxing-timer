@@ -297,9 +297,14 @@ export function SettingsScreen(props: Props) {
         </View>
       </ScrollView>
 
+      {/* Translucent on purpose: Android 15+ forces every window edge-to-edge
+          anyway, so pinning it here makes the inset the editor pads for the
+          same on every version instead of only the newest ones. */}
       <Modal
         visible={editingTimer !== null}
         animationType="slide"
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setEditingTimerId(null)}
       >
         {editingTimer ? (
@@ -345,8 +350,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    // On top of the safe-area inset: enough of a gap that the title and the
+    // tap targets read as their own bar rather than as part of the status bar.
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
   back: { color: colors.accent, fontSize: 16 },
   title: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },

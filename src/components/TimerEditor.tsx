@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Rule, Timer, Trigger } from '../types';
 import { uid } from '../utils/ids';
 import { formatDuration } from '../utils/format';
@@ -133,7 +134,10 @@ export function TimerEditor({ timer, rounds, advanced, onChange, onClose }: Prop
   };
 
   return (
-    <View style={styles.root}>
+    // A modal is its own window, outside the SafeAreaView App.tsx wraps the
+    // screens in, so it has to keep clear of the status and navigation bars
+    // itself — otherwise "Done" sits under the clock and the signal icons.
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={onClose} hitSlop={12}>
           <Text style={styles.back}>← Done</Text>
@@ -323,7 +327,7 @@ export function TimerEditor({ timer, rounds, advanced, onChange, onClose }: Prop
           </Text>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -394,8 +398,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    // On top of the safe-area inset: enough of a gap that the title and the
+    // tap targets read as their own bar rather than as part of the status bar.
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
   back: { color: colors.accent, fontSize: 16 },
   title: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Profile } from '../types';
 import { planTotalSeconds, profileCycles, profileCycleRestSec } from '../engine/plan';
 import { formatHMS } from '../utils/format';
@@ -74,8 +75,19 @@ export function ProfileManager({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.root}>
+    // Translucent + SafeAreaView: a modal is its own window, outside the
+    // SafeAreaView App.tsx wraps the screens in, so it has to keep clear of the
+    // status and navigation bars itself. Pinning translucency here makes that
+    // inset the same on every Android version, not only the ones (15+) that
+    // force every window edge-to-edge.
+    <Modal
+      visible={visible}
+      animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <Pressable onPress={onClose} hitSlop={12}>
             <Text style={styles.back}>← Done</Text>
@@ -176,7 +188,7 @@ export function ProfileManager({
             </View>
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -199,8 +211,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    // On top of the safe-area inset: enough of a gap that the title and the
+    // tap targets read as their own bar rather than as part of the status bar.
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
   back: { color: colors.accent, fontSize: 16 },
   title: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },
